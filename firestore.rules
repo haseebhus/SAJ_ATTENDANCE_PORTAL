@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function r() { return request.auth.token.role; }
+    function ok(d) {
+      return request.auth != null && (
+        r() == 'admin' ||
+        (r() == 'teacher' && d.key in request.auth.token.classes) ||
+        (r() == 'parent' && d.gr == request.auth.token.gr));
+    }
+    function teach(k) { return r() == 'admin' || (r() == 'teacher' && k in request.auth.token.classes); }
+    match /students/{id} {
+      allow read: if ok(resource.data);
+      allow write: if false;   // only via /api/rpc (admin)
+    }
+    match /att/{id} {
+      allow read: if ok(resource.data);
+      allow create: if request.auth != null && teach(request.resource.data.key)
+                    && request.resource.data.status in ['P','A','L','V'];
+      allow update: if request.auth != null && teach(resource.data.key) && teach(request.resource.data.key)
+                    && request.resource.data.status in ['P','A','L','V'];
+      allow delete: if request.auth != null && r() == 'admin';
+    }
+  }
+}
